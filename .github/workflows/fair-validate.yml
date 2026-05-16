@@ -21,10 +21,9 @@
 #       with:
 #         dmp_path: dmp.json
 #
-# Validation runs as two sequential steps so failures are immediately
-# attributable:
-#   1. Schema check  — RDA maDMP Common Standard structural validity
-#   2. Policy check  — institutional FAIR quality rules
+# Two sequential jobs appear as distinct nodes in the GHA workflow graph:
+#   schema-check  →  policy-check
+# A schema error stops the pipeline before policy rules are evaluated.
 
 on:
   workflow_call:
@@ -33,20 +32,33 @@ on:
         description: "Path to the maDMP JSON file."
         required: true
         type: string
-      fair_publish_version:
-        description: "PyPI version of fair-publish to install."
-        required: false
-        type: string
-        default: "latest"
     outputs:
       passed:
-        description: "True if all error-level rules passed."
-        value: ${{ jobs.validate.outputs.passed }}
+        description: "True if all error-level policy rules passed."
+        value: ${{ jobs.policy-check.outputs.passed }}
 
 jobs:
-  validate:
-    name: Validate maDMP
+
+  schema-check:
+    name: Schema check (RDA maDMP)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install fair-publish
+        run: pip install git+https://github.com/in-silico-institute/fair-publish.git
+
+      - name: Validate RDA maDMP schema
+        run: fair-publish schema-check "${{ inputs.dmp_path }}"
+
+  policy-check:
+    name: Policy check (FAIR rules)
+    runs-on: ubuntu-latest
+    needs: schema-check
     outputs:
       passed: ${{ steps.policy.outputs.passed }}
     steps:
@@ -65,10 +77,7 @@ jobs:
       - name: Install fair-publish
         run: pip install git+https://github.com/in-silico-institute/fair-publish.git
 
-      - name: Schema check (RDA maDMP Common Standard)
-        run: fair-publish schema-check "${{ inputs.dmp_path }}"
-
-      - name: Policy check (institutional FAIR rules)
+      - name: Check institutional FAIR policy
         id: policy
         run: |
           if fair-publish validate "${{ inputs.dmp_path }}" \
