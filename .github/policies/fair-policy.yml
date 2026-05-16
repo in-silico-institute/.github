@@ -1,6 +1,10 @@
 # In-Silico Institute — FAIR metadata policy
 # Applies to every dataset repository in the organisation.
 # Edit here; all project repos inherit the change on next push.
+# Bump version when rules change so zenodo_state.json records which
+# policy version each dataset was last published under.
+
+version: "1.0"
 
 rules:
   - name: Creator ORCID present
