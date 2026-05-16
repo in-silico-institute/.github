@@ -20,6 +20,11 @@
 #       uses: MY-ORG/.github/.github/workflows/fair-validate.yml@main
 #       with:
 #         dmp_path: dmp.json
+#
+# Validation runs as two sequential steps so failures are immediately
+# attributable:
+#   1. Schema check  — RDA maDMP Common Standard structural validity
+#   2. Policy check  — institutional FAIR quality rules
 
 on:
   workflow_call:
@@ -43,7 +48,7 @@ jobs:
     name: Validate maDMP
     runs-on: ubuntu-latest
     outputs:
-      passed: ${{ steps.validate.outputs.passed }}
+      passed: ${{ steps.policy.outputs.passed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,11 +65,15 @@ jobs:
       - name: Install fair-publish
         run: pip install git+https://github.com/in-silico-institute/fair-publish.git
 
-      - name: Validate
-        id: validate
+      - name: Schema check (RDA maDMP Common Standard)
+        run: fair-publish schema-check "${{ inputs.dmp_path }}"
+
+      - name: Policy check (institutional FAIR rules)
+        id: policy
         run: |
           if fair-publish validate "${{ inputs.dmp_path }}" \
-               --policy _org_policy/.github/policies/fair-policy.yml; then
+               --policy _org_policy/.github/policies/fair-policy.yml \
+               --skip-schema; then
             echo "passed=true"  >> "$GITHUB_OUTPUT"
           else
             echo "passed=false" >> "$GITHUB_OUTPUT"
@@ -76,7 +85,8 @@ jobs:
         run: |
           echo "## FAIR Validation Report" >> "$GITHUB_STEP_SUMMARY"
           fair-publish report "${{ inputs.dmp_path }}" \
-            --policy _org_policy/.github/policies/fair-policy.yml --format json \
+            --policy _org_policy/.github/policies/fair-policy.yml \
+            --skip-schema --format json \
           | python3 -c "
           import json, sys
           r = json.load(sys.stdin)
